@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Section 9 - Tactical Radar Array</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
+        #map { height: 100vh; width: 100vw; z-index: 1; background: #000; }
+        
+        /* TACTICAL HUD - Click-through enabled to prevent "Dark Window" effect */
+        #hud {
+            position: absolute; 
+            top: 20px; 
+            right: 20px; 
+            width: 280px;
+            z-index: 1000; 
+            background: rgba(0, 20, 0, 0.85); 
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            padding: 15px;
+            pointer-events: none; /* Allows map interaction underneath */
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.3);
+            text-transform: uppercase;
+        }
+
+        /* Tactical Zoom Controls */
+        .leaflet-bar a { 
+            background: #111 !important; 
+            color: #00ff00 !important; 
+            border: 1px solid #004400 !important; 
+        }
+    </style>
+</head>
+<body>
+
+    <div id="hud">
+        <div style="font-size: 1.1em; border-bottom: 1px solid #004400; margin-bottom: 8px; padding-bottom: 4px;">
+            <b>Tactical HUD Alpha</b>
+        </div>
+        <b>Status:</b> <span id="status">Linking...</span><br>
+        <b>Sensor:</b> KLSX (St. Louis)<br>
+        <b>Uplink:</b> <span id="pt-count">0</span> Points
+    </div>
+    
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-app.js";
+        import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCLpBKVtRzf-uuM4r-w5AFcm-i2XrSiVPk",
+            authDomain: "radar-5e4a5.firebaseapp.com",
+            projectId: "radar-5e4a5",
+            storageBucket: "radar-5e4a5.firebasestorage.app",
+            messagingSenderId: "230281188214",
+            appId: "1:230281188214:web:9a2bcadae56281749b6057"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Map setup centered on the KLSX Radar Dish
+        const map = L.map('map', { zoomControl: true }).setView([38.6986, -90.6828], 8);
+        
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap &copy; CARTO'
+        }).addTo(map);
+
+        const radarLayer = L.layerGroup().addTo(map);
+
+        // THE FAMOUS PROJECTION METHOD: Polar to GPS
+        function projectPoint(lat, lon, distKm, brngDeg) {
+            const R = 6371; // Earth's Mean Radius in km
+            const brng = brngDeg * Math.PI / 180;
+            const lat1 = lat * Math.PI / 180;
+            const lon1 = lon * Math.PI / 180;
+
+            const lat2 = Math.asin(Math.sin(lat1) * Math.cos(distKm / R) +
+                         Math.cos(lat1) * Math.sin(distKm / R) * Math.cos(brng));
+            const lon2 = lon1 + Math.atan2(Math.sin(brng) * Math.sin(distKm / R) * Math.cos(lat1),
+                         Math.cos(distKm / R) - Math.sin(lat1) * Math.sin(lat2));
+
+            return [lat2 * 180 / Math.PI, lon2 * 180 / Math.PI];
+        }
+
+        function getDbzColor(v) {
+            if (v >= 50) return "#ff00ff"; // Extreme (Hail/Tornado Core)
+            if (v >= 40) return "#ff0000"; // Severe
+            if (v >= 30) return "#ffff00"; // Moderate
+            return "#00ff00";              // Light
+        }
+
+        // Real-time listener for the Cabinet
+        onSnapshot(doc(db, "radar_live", "STORM_DATA"), (docSnap) => {
+            if (docSnap.exists()) {
+                radarLayer.clearLayers();
+                const points = JSON.parse(docSnap.data().points);
+                const origin = [38.6986, -90.6828];
+
+                document.getElementById('pt-count').innerText = points.length;
+                document.getElementById('status').innerText = "ONLINE - UPLINK ACTIVE";
+
+                points.forEach(pt => {
+                    // Logic: gate * 0.25km per gate
+                    const coords = projectPoint(origin[0], origin[1], pt.g * 0.25, pt.a);
+                    
+                    // Draw a 250m tactical square
+                    L.rectangle([
+                        [coords[0] - 0.0015, coords[1] - 0.0015],
+                        [coords[0] + 0.0015, coords[1] + 0.0015]
+                    ], {
+                        color: getDbzColor(pt.v),
+                        weight: 0,
+                        fillOpacity: 0.8,
+                        fillColor: getDbzColor(pt.v)
+                    }).addTo(radarLayer);
+                });
+            }
+        });
+    </script>
+</body>
+</html>
