@@ -5,40 +5,34 @@
     <title>Section 9 - Tactical Radar Array</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
-    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="timeline.css">
     
     <style>
         body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
         #map { height: 100vh; width: 100vw; z-index: 1; background: #000; }
         
-        /* TACTICAL HUD */
         #hud {
-            position: absolute; top: 20px; right: 20px; width: 280px; z-index: 1000; 
-            background: rgba(0, 20, 0, 0.85); border: 1px solid #00ff00; color: #00ff00;
-            font-family: 'Courier New', monospace; padding: 15px; pointer-events: none;
-            box-shadow: 0 0 15px rgba(0, 255, 0, 0.3); text-transform: uppercase;
+            position: absolute; 
+            top: 20px; 
+            right: 20px; 
+            width: 280px; 
+            z-index: 1000; 
+            background: rgba(0, 20, 0, 0.85); 
+            border: 1px solid #00ff00; 
+            color: #00ff00;
+            font-family: 'Courier New', monospace; 
+            padding: 15px; 
+            pointer-events: none;
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.3); 
+            text-transform: uppercase;
         }
-        .leaflet-bar a { background: #111 !important; color: #00ff00 !important; border: 1px solid #004400 !important; }
-
-        /* TIMELINE SCRUBBER */
-        #timeline-container {
-            position: fixed; bottom: 0; left: 0; width: 100vw;
-            background: rgba(5, 5, 5, 0.95); border-top: 1px solid #004400; z-index: 2000;
-            display: flex; flex-direction: column; font-family: 'Courier New', monospace; user-select: none;
+        
+        .leaflet-bar a { 
+            background: #111 !important; 
+            color: #00ff00 !important; 
+            border: 1px solid #004400 !important; 
         }
-        .scroll-row { display: flex; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
-        .scroll-row::-webkit-scrollbar { display: none; }
-        .time-block {
-            padding: 12px 20px; text-align: center; color: #00ff00;
-            cursor: pointer; border-right: 1px solid #002200;
-            min-width: 70px; flex-shrink: 0; transition: background 0.2s;
-        }
-        .time-block:hover { background: rgba(0, 255, 0, 0.1); }
-        .time-block.active { background: #ffaa00; color: #000; font-weight: bold; border-right: 1px solid #cc8800; }
-        .day-label { font-size: 0.8em; text-transform: uppercase; display: block; margin-bottom: 3px; }
-        .date-label { font-size: 1.1em; }
-        .hour-label { font-size: 1.2em; }
     </style>
 </head>
 <body>
@@ -47,89 +41,26 @@
         <div style="font-size: 1.1em; border-bottom: 1px solid #004400; margin-bottom: 8px; padding-bottom: 4px;">
             <b>Tactical HUD Alpha</b>
         </div>
-        <b>Status:</b> <span id="status">Linking...</span><br>
+        <b>Status:</b> <span id="status">INITIALIZING...</span><br>
         <b>Sensor:</b> KLSX (St. Louis)<br>
         <b>Uplink:</b> <span id="pt-count">0</span> Points
     </div>
     
     <div id="map"></div>
 
-    <!-- Timeline UI -->
+    <!-- Timeline Scrubber UI Injection -->
     <div id="timeline-container">
         <div id="date-row" class="scroll-row"></div>
         <div id="hour-row" class="scroll-row"></div>
     </div>
 
-    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="timeline.js"></script>
     
-    <!-- Timeline Engine -->
-    <script>
-        const dateRow = document.getElementById('date-row');
-        const hourRow = document.getElementById('hour-row');
-        let selectedDate = new Date();
-        let selectedHour = selectedDate.getHours();
-
-        function generateDates() {
-            dateRow.innerHTML = '';
-            const days = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
-            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            
-            for (let i = -3; i <= 3; i++) {
-                let tDate = new Date();
-                tDate.setDate(tDate.getDate() + i);
-                
-                const div = document.createElement('div');
-                div.className = `time-block ${i === 0 ? 'active' : ''}`;
-                div.innerHTML = `<span class="day-label">${days[tDate.getDay()]}</span><span class="date-label">${months[tDate.getMonth()]} ${String(tDate.getDate()).padStart(2, '0')}</span>`;
-                
-                div.onclick = () => {
-                    document.querySelectorAll('#date-row .time-block').forEach(el => el.classList.remove('active'));
-                    div.classList.add('active');
-                    selectedDate = tDate;
-                    triggerUplink();
-                };
-                dateRow.appendChild(div);
-            }
-        }
-
-        function generateHours() {
-            hourRow.innerHTML = '';
-            for (let h = 0; h < 24; h++) {
-                const div = document.createElement('div');
-                div.className = `time-block ${h === selectedHour ? 'active' : ''}`;
-                div.innerHTML = `<span class="hour-label">${h % 12 === 0 ? 12 : h % 12} <small>${h >= 12 ? 'PM' : 'AM'}</small></span>`;
-                
-                div.onclick = () => {
-                    document.querySelectorAll('#hour-row .time-block').forEach(el => el.classList.remove('active'));
-                    div.classList.add('active');
-                    selectedHour = h;
-                    triggerUplink();
-                };
-                hourRow.appendChild(div);
-            }
-            const activeHourEl = hourRow.querySelector('.active');
-            if (activeHourEl) activeHourEl.scrollIntoView({ behavior: 'smooth', inline: 'center' });
-        }
-
-        function triggerUplink() {
-            const formattedDate = selectedDate.toISOString().split('T')[0];
-            const formattedHour = String(selectedHour).padStart(2, '0') + "00";
-            
-            // Send signal to the map engine
-            window.dispatchEvent(new CustomEvent('tactical-time-shift', { 
-                detail: { date: formattedDate, hour: formattedHour } 
-            }));
-        }
-
-        generateDates();
-        generateHours();
-    </script>
-
-    <!-- Radar Engine -->
+    <!-- Radar Projection & Database Engine -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-app.js";
-        import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyCLpBKVtRzf-uuM4r-w5AFcm-i2XrSiVPk",
@@ -143,6 +74,7 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
+        // Center on KLSX
         const map = L.map('map', { zoomControl: true }).setView([38.6986, -90.6828], 8);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; OpenStreetMap &copy; CARTO'
@@ -171,34 +103,49 @@
             return "#00ff00";
         }
 
-        // Live Uplink Listener
-        onSnapshot(doc(db, "radar_live", "STORM_DATA"), (docSnap) => {
-            if (docSnap.exists()) {
-                radarLayer.clearLayers();
-                const points = JSON.parse(docSnap.data().points);
-                const origin = [38.6986, -90.6828];
+        // --- SIGNAL INTERCEPTOR ---
+        // Listens for the timeline to shift and fetches the corresponding data
+        window.addEventListener('tactical-time-shift', async (e) => {
+            const { date, hour } = e.detail;
+            document.getElementById('status').innerText = `SEEKING: ${hour} HRS`;
+            
+            const targetDoc = `STORM_${date}_${hour}`;
+            console.log(`[SYSTEM] Requesting Archive Data: radar_archive/${targetDoc}`);
 
-                document.getElementById('pt-count').innerText = points.length;
-                document.getElementById('status').innerText = "ONLINE - UPLINK ACTIVE";
+            try {
+                const docRef = doc(db, "radar_archive", targetDoc);
+                const docSnap = await getDoc(docRef);
 
-                points.forEach(pt => {
-                    const coords = projectPoint(origin[0], origin[1], pt.g * 0.25, pt.a);
-                    L.rectangle([
-                        [coords[0] - 0.0015, coords[1] - 0.0015],
-                        [coords[0] + 0.0015, coords[1] + 0.0015]
-                    ], {
-                        color: getDbzColor(pt.v), weight: 0, fillOpacity: 0.8, fillColor: getDbzColor(pt.v)
-                    }).addTo(radarLayer);
-                });
+                radarLayer.clearLayers(); 
+
+                if (docSnap.exists()) {
+                    const points = JSON.parse(docSnap.data().points);
+                    const origin = [38.6986, -90.6828]; // KLSX coordinates
+
+                    document.getElementById('pt-count').innerText = points.length;
+                    document.getElementById('status').innerText = "DATA ACQUIRED";
+
+                    points.forEach(pt => {
+                        const coords = projectPoint(origin[0], origin[1], pt.g * 0.25, pt.a);
+                        L.rectangle([
+                            [coords[0] - 0.0015, coords[1] - 0.0015],
+                            [coords[0] + 0.0015, coords[1] + 0.0015]
+                        ], {
+                            color: getDbzColor(pt.v), weight: 0, fillOpacity: 0.8, fillColor: getDbzColor(pt.v)
+                        }).addTo(radarLayer);
+                    });
+                } else {
+                    document.getElementById('pt-count').innerText = "0";
+                    document.getElementById('status').innerText = "NO SIGNAL";
+                }
+            } catch (error) {
+                console.error("Archive fetch failed:", error);
+                document.getElementById('status').innerText = "CONNECTION ERR";
             }
         });
 
-        // Event Listener for the Timeline Scrubber
-        window.addEventListener('tactical-time-shift', (e) => {
-            const { date, hour } = e.detail;
-            document.getElementById('status').innerText = `SEEKING: ${hour} HRS`;
-            console.log(`[SYSTEM] Target timestamp updated: ${date} at ${hour}`);
-        });
+        // Fire initial load
+        triggerUplink(); 
     </script>
 </body>
 </html>
