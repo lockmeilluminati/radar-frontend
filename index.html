@@ -4,39 +4,21 @@
     <meta charset="UTF-8">
     <title>Section 9 - Tactical Radar Array</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="timeline.css">
-    
     <style>
         body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
         #map { height: 100vh; width: 100vw; z-index: 1; background: #000; }
-        
         #hud {
-            position: absolute; 
-            top: 20px; 
-            right: 20px; 
-            width: 280px; 
-            z-index: 1000; 
-            background: rgba(0, 20, 0, 0.85); 
-            border: 1px solid #00ff00; 
-            color: #00ff00;
-            font-family: 'Courier New', monospace; 
-            padding: 15px; 
-            pointer-events: none;
-            box-shadow: 0 0 15px rgba(0, 255, 0, 0.3); 
-            text-transform: uppercase;
+            position: absolute; top: 20px; right: 20px; width: 280px; z-index: 1000; 
+            background: rgba(0, 20, 0, 0.85); border: 1px solid #00ff00; color: #00ff00;
+            font-family: 'Courier New', monospace; padding: 15px; pointer-events: none;
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.3); text-transform: uppercase;
         }
-        
-        .leaflet-bar a { 
-            background: #111 !important; 
-            color: #00ff00 !important; 
-            border: 1px solid #004400 !important; 
-        }
+        .leaflet-bar a { background: #111 !important; color: #00ff00 !important; border: 1px solid #004400 !important; }
     </style>
 </head>
 <body>
-
     <div id="hud">
         <div style="font-size: 1.1em; border-bottom: 1px solid #004400; margin-bottom: 8px; padding-bottom: 4px;">
             <b>Tactical HUD Alpha</b>
@@ -48,16 +30,14 @@
     
     <div id="map"></div>
 
-    <!-- Timeline Scrubber UI Injection -->
     <div id="timeline-container">
         <div id="date-row" class="scroll-row"></div>
         <div id="hour-row" class="scroll-row"></div>
-    </div>
+        <div id="minute-row" class="scroll-row"></div> </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="timeline.js"></script>
     
-    <!-- Radar Projection & Database Engine -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-app.js";
         import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore.js";
@@ -71,67 +51,39 @@
             appId: "1:230281188214:web:9a2bcadae56281749b6057"
         };
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+        const db = getFirestore(initializeApp(firebaseConfig));
 
-        // Center on KLSX
         const map = L.map('map', { zoomControl: true }).setView([38.6986, -90.6828], 8);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; OpenStreetMap &copy; CARTO'
-        }).addTo(map);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
 
         const radarLayer = L.layerGroup().addTo(map);
 
         function projectPoint(lat, lon, distKm, brngDeg) {
-            const R = 6371; 
-            const brng = brngDeg * Math.PI / 180;
-            const lat1 = lat * Math.PI / 180;
-            const lon1 = lon * Math.PI / 180;
-
-            const lat2 = Math.asin(Math.sin(lat1) * Math.cos(distKm / R) +
-                         Math.cos(lat1) * Math.sin(distKm / R) * Math.cos(brng));
-            const lon2 = lon1 + Math.atan2(Math.sin(brng) * Math.sin(distKm / R) * Math.cos(lat1),
-                         Math.cos(distKm / R) - Math.sin(lat1) * Math.sin(lat2));
-
+            const R = 6371, brng = brngDeg * Math.PI / 180, lat1 = lat * Math.PI / 180, lon1 = lon * Math.PI / 180;
+            const lat2 = Math.asin(Math.sin(lat1) * Math.cos(distKm / R) + Math.cos(lat1) * Math.sin(distKm / R) * Math.cos(brng));
+            const lon2 = lon1 + Math.atan2(Math.sin(brng) * Math.sin(distKm / R) * Math.cos(lat1), Math.cos(distKm / R) - Math.sin(lat1) * Math.sin(lat2));
             return [lat2 * 180 / Math.PI, lon2 * 180 / Math.PI];
         }
 
-        function getDbzColor(v) {
-            if (v >= 50) return "#ff00ff";
-            if (v >= 40) return "#ff0000";
-            if (v >= 30) return "#ffff00";
-            return "#00ff00";
-        }
-
-        // --- SIGNAL INTERCEPTOR ---
-        // Listens for the timeline to shift and fetches the corresponding data
         window.addEventListener('tactical-time-shift', async (e) => {
-            const { date, hour } = e.detail;
-            document.getElementById('status').innerText = `SEEKING: ${hour} HRS`;
+            const { date, hour, minute } = e.detail;
+            document.getElementById('status').innerText = `SEEKING: ${hour}:${minute} HRS`;
             
-            const targetDoc = `STORM_${date}_${hour}`;
-            console.log(`[SYSTEM] Requesting Archive Data: radar_archive/${targetDoc}`);
+            const targetDoc = `STORM_${date}_${hour}${minute}`;
 
             try {
-                const docRef = doc(db, "radar_archive", targetDoc);
-                const docSnap = await getDoc(docRef);
-
+                const docSnap = await getDoc(doc(db, "radar_archive", targetDoc));
                 radarLayer.clearLayers(); 
 
                 if (docSnap.exists()) {
                     const points = JSON.parse(docSnap.data().points);
-                    const origin = [38.6986, -90.6828]; // KLSX coordinates
-
                     document.getElementById('pt-count').innerText = points.length;
                     document.getElementById('status').innerText = "DATA ACQUIRED";
 
                     points.forEach(pt => {
-                        const coords = projectPoint(origin[0], origin[1], pt.g * 0.25, pt.a);
-                        L.rectangle([
-                            [coords[0] - 0.0015, coords[1] - 0.0015],
-                            [coords[0] + 0.0015, coords[1] + 0.0015]
-                        ], {
-                            color: getDbzColor(pt.v), weight: 0, fillOpacity: 0.8, fillColor: getDbzColor(pt.v)
+                        const coords = projectPoint(38.6986, -90.6828, pt.g * 0.25, pt.a);
+                        L.rectangle([[coords[0]-0.0015, coords[1]-0.0015], [coords[0]+0.0015, coords[1]+0.0015]], {
+                            color: pt.v >= 50 ? "#f0f" : pt.v >= 40 ? "#f00" : pt.v >= 30 ? "#ff0" : "#0f0", weight: 0, fillOpacity: 0.8
                         }).addTo(radarLayer);
                     });
                 } else {
@@ -139,13 +91,9 @@
                     document.getElementById('status').innerText = "NO SIGNAL";
                 }
             } catch (error) {
-                console.error("Archive fetch failed:", error);
                 document.getElementById('status').innerText = "CONNECTION ERR";
             }
         });
-
-        // Fire initial load
-        triggerUplink(); 
     </script>
 </body>
 </html>
